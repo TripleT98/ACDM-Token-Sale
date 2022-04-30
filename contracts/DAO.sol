@@ -14,9 +14,9 @@ contract DAO {
         bytes signature;
         address recepient;
         string description;
-        uint256 reject_votes;
-        uint256 resolve_votes;
-        uint256 start_time;
+        uint256 rejectVotes;
+        uint256 resolveVotes;
+        uint256 startTime;
         uint256 duration;
         mapping (address => uint256) voters;
     }
@@ -27,7 +27,7 @@ contract DAO {
         ExecutionFail
     }
 
-    mapping (address => uint[]) public userToVotes;
+    mapping (address => uint) public lastVoteForUser;
     mapping (uint => Proposal) public proposals;
     mapping (bytes => uint) public signatureToId;
 
@@ -83,12 +83,12 @@ contract DAO {
         require(_signature.length != 0, "Error: Empty signature!");
         require(_recepient != address(0), "Error: Zero address of recepient!");
         require(signatureToId[_signature] == 0, "Error: Proposal with such a signature is already exists!");
-        Proposal storage current_proposal = proposals[id];
-        current_proposal.signature = _signature;
-        current_proposal.start_time = block.timestamp;
-        current_proposal.recepient = _recepient;
-        current_proposal.description = _description;
-        current_proposal.duration = vote_duration;
+        Proposal storage currentProposal = proposals[id];
+        currentProposal.signature = _signature;
+        currentProposal.startTime = block.timestamp;
+        currentProposal.recepient = _recepient;
+        currentProposal.description = _description;
+        currentProposal.duration = vote_duration;
         signatureToId[_signature] = id;
         id++;
     }
@@ -98,14 +98,18 @@ contract DAO {
         (,bytes memory data) = staking.call(abi.encodeWithSignature("getStake(address)", msg.sender));
         uint _stakingAmount = abi.decode(data, (uint));
         require(_stakingAmount > 0, "Error: Your staking balance is equals to zero!");
-        Proposal storage current_proposal = proposals[_id];
+        Proposal storage currentProposal = proposals[_id];
+        require(currentProposal.voters[msg.sender] == 0, "Error: Can`t vote twice on the same proposal!");
         if(_vote){
-            current_proposal.resolve_votes += _stakingAmount;
+            currentProposal.resolveVotes += _stakingAmount;
         }else{
-            current_proposal.reject_votes += _stakingAmount;
+            currentProposal.rejectVotes += _stakingAmount;
         }
-        current_proposal.voters[msg.sender] += _stakingAmount;
-        userToVotes[msg.sender].push(_id);
+        currentProposal.voters[msg.sender] += _stakingAmount;
+        uint freezeTime = currentProposal.startTime + currentProposal.duration;
+        if(freezeTime > lastVoteForUser[msg.sender]){
+          lastVoteForUser[msg.sender] = freezeTime;
+        }
     }
 
     function _execute(Proposal storage _proposal) internal returns (bool success){
@@ -113,37 +117,21 @@ contract DAO {
     }
 
     function finish(uint _id) isExist(_id) public {
-        Proposal storage current_proposal = proposals[_id];
-        require(current_proposal.start_time + current_proposal.duration <= block.timestamp, "Error: Can`t finish this proposal yet!");
-        require(current_proposal.resolve_votes != current_proposal.reject_votes, "Error: Can`t finish this proposal while `resolve votes` amount is equals to `reject votes` amount!");
+        Proposal storage currentProposal = proposals[_id];
+        require(currentProposal.startTime + currentProposal.duration <= block.timestamp, "Error: Can`t finish this proposal yet!");
+        require(currentProposal.resolveVotes != currentProposal.rejectVotes, "Error: Can`t finish this proposal while `resolve votes` amount is equals to `reject votes` amount!");
         uint totalSuply;
         totalSuply = _getTotalSuply();
-        require(current_proposal.resolve_votes + current_proposal.reject_votes >= (totalSuply/100)*minimumQuorum, "Error: Can`t finish this proposal while enough tokens not used in vote");
-        if(current_proposal.resolve_votes > current_proposal.reject_votes){
-            bool success = _execute(current_proposal);
-            if(success){
-                emit ProposalFinished(_id, Status.Resolved, msg.sender);
-            }else{
-                emit ProposalFinished(_id, Status.ExecutionFail, msg.sender);
-            }
+        require(currentProposal.resolveVotes + currentProposal.rejectVotes >= (totalSuply/100)*minimumQuorum, "Error: Can`t finish this proposal while enough tokens not used in vote");
+        if(currentProposal.resolveVotes > currentProposal.rejectVotes){
+            bool success = _execute(currentProposal);
+            Status isExecute = success?Status.Resolved:Status.ExecutionFail;
+            emit ProposalFinished(_id, isExecute, msg.sender);
         }else{
             emit ProposalFinished(_id, Status.Rejected, msg.sender);
         }
         delete proposals[_id];
 
-    }
-
-    function isOnVote(address _voter) public returns(bool){
-        uint[] storage votes = userToVotes[_voter];
-        for(uint i = 0; i < votes.length; i++){
-            if(proposals[votes[i]].recepient == address(0)){
-                uint el = votes[i];
-                votes[i] = votes[votes.length - 1];
-                votes[votes.length - 1] = el;
-                votes.pop();
-            }
-        }
-        return votes.length == 0;
     }
 
 }
