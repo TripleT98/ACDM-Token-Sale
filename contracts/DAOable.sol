@@ -2,7 +2,7 @@ pragma solidity ^0.8.0;
 //SPDX-License-Identifier: MIT
 
 contract DAOable{
-
+  address public admin;
   address DAO;
 
   modifier OnlyDAO(){
@@ -10,7 +10,12 @@ contract DAOable{
     _;
   }
 
-  constructor(address _DAO){
+  constructor(){
+    admin = msg.sender;
+  }
+
+  function setDAO(address _DAO) public {
+    require(admin == msg.sender, "Error: Only admin has access!");
     DAO = _DAO;
   }
 

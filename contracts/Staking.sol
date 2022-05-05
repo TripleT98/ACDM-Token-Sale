@@ -11,8 +11,9 @@ contract Staking is DAOable, ReentrancyGuard{
 
   address public stakingToken;
   address public rewardToken;
+  uint public lockTime = 3 days;
 
-  uint public freezeTime = 259200;
+  uint public rewadTime = 259200;
   uint public rewardShare = 3;
 
   modifier isStakeholderExist(){
@@ -20,13 +21,15 @@ contract Staking is DAOable, ReentrancyGuard{
     _;
   }
 
-  function setFreezeTime(uint _freezeTime) OnlyDAO public {
-    freezeTime = _freezeTime;
+  function setRewardTime(uint _rewadTime) OnlyDAO public {
+    rewadTime = _rewadTime;
   }
 
   function setRewardShare(uint _rewardShare) OnlyDAO public {
     rewardShare = _rewardShare;
   }
+
+
 
   struct Stakeholder{
     uint256 stake;
@@ -41,9 +44,10 @@ contract Staking is DAOable, ReentrancyGuard{
 
   mapping (address=>Stakeholder) public stakeholders;
 
-  constructor(address XXXToken, address ACDMToken, address _DAO) DAOable(_DAO) {
+  constructor(address XXXToken, address ACDMToken) DAOable() {
     stakingToken = XXXToken;
     rewardToken = ACDMToken;
+    admin = msg.sender;
   }
 
   function getStake(address _stakeholder) view public returns(uint) {
@@ -53,7 +57,7 @@ contract Staking is DAOable, ReentrancyGuard{
   function stake(uint _amount) public Reentrancy {
     (bool success, bytes memory data) = stakingToken.call(abi.encodeWithSignature("allowance(address,address)", msg.sender, address(this)));
     uint allowanceAmount = abi.decode(data, (uint));
-    require(allowanceAmount >= _amount, "Error: Staking token contract has no allowances to transfer this token amount from you!");
+    require(allowanceAmount >= _amount, "Error: Staking without allowance!");
     (success,) = stakingToken.call(abi.encodeWithSignature("transferFrom(address,address,uint256)",msg.sender, address(this), _amount));
     require(success, "Error: Can`t transfer tokend from your address!");
 
@@ -73,15 +77,14 @@ contract Staking is DAOable, ReentrancyGuard{
 
     require(_stakeholder.stake > 0, "Your stake is equals to zero!");
 
-    uint reward_stack = (block.timestamp - _stakeholder.timestamp)/freezeTime;
+    uint reward_stack = (block.timestamp - _stakeholder.timestamp)/rewadTime;
     uint reward_percent = reward_stack*rewardShare;
     _stakeholder.reward = (_stakeholder.stake/100)*reward_percent;
-    _stakeholder.timestamp = _stakeholder.timestamp + (reward_stack*freezeTime);
-
+    _stakeholder.timestamp = _stakeholder.timestamp + (reward_stack*rewadTime);
     (bool success,) = rewardToken.call(abi.encodeWithSignature("transfer(address,uint256)", msg.sender, _stakeholder.reward));
     require(success, "Error: Can`t transfer tokens to your address!");
-    _stakeholder.reward = 0;
     emit Claim(msg.sender, _stakeholder.reward);
+    _stakeholder.reward = 0;
   }
 
   function unstake(uint _amount) isStakeholderExist public {
@@ -95,10 +98,11 @@ contract Staking is DAOable, ReentrancyGuard{
   }
 
   function _unstake(Stakeholder storage _stakeholder, uint _amount) Reentrancy internal {
-    require(_stakeholder.stake >= _amount, "You have no such a big amount of stake tokens.");
+    require(_stakeholder.timestamp + lockTime <= block.timestamp, "Error: Tokens locked!");
+    require(_stakeholder.stake >= _amount, "You have no such a big amount of stake tokens!");
     (,bytes memory data) = DAO.call(abi.encodeWithSignature("lastVoteForUser(address)", msg.sender));
     uint onVoting = abi.decode(data, (uint));
-    require(onVoting >= block.timestamp, "Error: While you are in vote, u can`t get your tokens back!");
+    require(onVoting <= block.timestamp, "Error: While you are in vote, u can`t get your tokens back!");
     (bool success,) = stakingToken.call(abi.encodeWithSignature("transfer(address,uint256)",msg.sender, _amount));
     require(success, "Error: Cant`t transfer yout tokens back to you!");
     _stakeholder.stake -= _amount;
