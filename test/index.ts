@@ -457,7 +457,7 @@ let err_mess: string;
       await expect(staking.connect(user1).unstake("1")).to.be.revertedWith(err_mess);
       err_mess = "You have no such a big amount of stake tokens!";
       await increaseTime(3*day);
-      await expect(staking.connect(user1).unstake("100000000000")).to.be.revertedWith(err_mess);
+      await expect(staking.connect(user1).unstake("100000000000000000001")).to.be.revertedWith(err_mess);
 
     })
 
