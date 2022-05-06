@@ -1,30 +1,52 @@
-// We require the Hardhat Runtime Environment explicitly here. This is optional
-// but useful for running the script in a standalone fashion through `node <script>`.
-//
-// When running the script with `npx hardhat run <script>` you'll find the Hardhat
-// Runtime Environment's members available in the global scope.
+
 import { ethers } from "hardhat";
+import * as dotenv from "dotenv";
+dotenv.config();
 
-async function main() {
-  // Hardhat always runs the compile task when running scripts with its command
-  // line interface.
-  //
-  // If this script is run directly using `node` you may want to call compile
-  // manually to make sure everything is compiled
-  // await hre.run('compile');
+async function deployTokens() {
 
-  // We get the contract to deploy
-  const Greeter = await ethers.getContractFactory("Greeter");
-  const greeter = await Greeter.deploy("Hello, Hardhat!");
+  const ERC20 = await ethers.getContractFactory("MyERC20");
+  const stakingToken = await ERC20.deploy("XXXToken", "XXX", 18);
 
-  await greeter.deployed();
+  await stakingToken.deployed();
 
-  console.log("Greeter deployed to:", greeter.address);
+  console.log("Staking token deployed to:", stakingToken.address);
+
+  const rewardToken = await ERC20.deploy("ACDMToken", "ACDM", 6);
+
+  await rewardToken.deployed();
+
+  console.log("Reward token deployed to:", rewardToken.address);
 }
 
-// We recommend this pattern to be able to use async/await everywhere
-// and properly handle errors.
-main().catch((error) => {
+
+async function deployStakingAndDAO() {
+
+  const Staking = await ethers.getContractFactory("Staking");
+  const staking = await Staking.deploy(process.env.STAKING_TOKEN as string, process.env.REWARD_TOKEN as string);
+
+  await staking.deployed();
+
+  console.log("Staking deployed to:", staking.address);
+
+  const DAO = await ethers.getContractFactory("DAO");
+  const dao = await DAO.deploy(process.env.PUBLIC_KEY as string, 259200);
+
+  await dao.deployed();
+
+  console.log("DAO deployed to:", dao.address);
+}
+
+async function deployTrade(){
+  const Trade = await ethers.getContractFactory("Trade");
+  const trade = await Trade.deploy(259200);
+
+  await trade.deployed();
+
+  console.log("Trade deployed to:", trade.address);
+}
+
+deployStakingAndDAO().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });

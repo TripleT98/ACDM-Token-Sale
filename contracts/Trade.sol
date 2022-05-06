@@ -66,7 +66,7 @@ contract Trade is ReentrancyGuard, DAOable {
   }
 
   modifier OnlySaleRound(){
-    require(currentRound == Rounds.Sale, "Error: Current round is sale round!");
+    require(currentRound == Rounds.Sale, "Error: Current round is trade round!");
     bool isSaleRound = saleRound.endTime >= block.timestamp;
     if(!isSaleRound && currentRound == Rounds.Sale){
       _setTradeRound();
@@ -76,7 +76,7 @@ contract Trade is ReentrancyGuard, DAOable {
   }
 
   modifier OnlyTradeRound(){
-    require(currentRound == Rounds.Trade || currentRound == Rounds.None, "Error: Current round is trade round!");
+    require(currentRound == Rounds.Trade || currentRound == Rounds.None, "Error: Current round is sale round!");
     bool isTradeRound = tradeRound.endTime >= block.timestamp;
     if(!isTradeRound && currentRound == Rounds.Trade){
       _setSaleRound();
@@ -100,6 +100,7 @@ contract Trade is ReentrancyGuard, DAOable {
   }
 
   function getOrderById(uint _id) public view returns(Order memory){
+    require(tradeRound.orders[_id].owner != address(0), "Not exist!");
     return tradeRound.orders[_id];
   }
 
@@ -109,7 +110,7 @@ contract Trade is ReentrancyGuard, DAOable {
   }
 
   function withdrawEth() Reentrancy public  {
-    require(balances[msg.sender] >= 0, "Error: Zero balance!");
+    require(balances[msg.sender] > 0, "Error: Zero balance!");
     payable(msg.sender).transfer(balances[msg.sender]);
     balances[msg.sender] = 0;
   }
@@ -222,8 +223,8 @@ contract Trade is ReentrancyGuard, DAOable {
     tradeRound.ethInTrade += totalPrice;
     emit Buy(currentOrder.owner, msg.sender, _id, _amount, currentOrder.price);
     if(currentOrder.amount == 0){
-      delete tradeRound.orders[_id];
       emit OrderClosed(currentOrder.owner, _id);
+      delete tradeRound.orders[_id];
     }
   }
 

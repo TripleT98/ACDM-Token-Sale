@@ -74,9 +74,7 @@ contract Staking is DAOable, ReentrancyGuard{
 
   function claim() Reentrancy isStakeholderExist public {
     Stakeholder storage _stakeholder = stakeholders[msg.sender];
-
-    require(_stakeholder.stake > 0, "Your stake is equals to zero!");
-
+    require(_stakeholder.timestamp <= block.timestamp, "Error: It is not time yet to claim!");
     uint reward_stack = (block.timestamp - _stakeholder.timestamp)/rewadTime;
     uint reward_percent = reward_stack*rewardShare;
     _stakeholder.reward = (_stakeholder.stake/100)*reward_percent;

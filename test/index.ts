@@ -185,20 +185,17 @@ describe("Staking", async ()=>{
 
      })
 
-  //addProposal(bytes calldata _signature, address _recepient, string calldata _description)
-
-
   it("Testing set fee function", async()=>{
     let prevFee: string = String(await trade.fee());
     let data: string = encodeFunctionCall("setFee", ["_fee"], ["uint256"], ["10"]);
     let recepient: string = trade.address;
     let description: string = "Set new fee to trading platform!";
     await addProposal({chairman, data, recepient, description});
-    await dao.connect(user1).vote("1",true);
-    await dao.connect(user2).vote("1",true);
-    await dao.connect(user3).vote("1",false);
+    await dao.connect(user1).vote("2",true);
+    await dao.connect(user2).vote("2",true);
+    await dao.connect(user3).vote("2",false);
     await increaseTime(3*day);
-    await dao.finish("1");
+    await dao.finish("2");
     expect(String(await trade.fee())).to.eq("10");
   })
 
@@ -212,8 +209,8 @@ describe("Staking", async ()=>{
     let recepient: string = trade.address;
     await addProposal({chairman, data:dataFee1, recepient, description:description1});
     await addProposal({chairman, data:dataFee2, recepient, description:description2});
-    let prop1 = await dao.proposals("1");
-    let prop2 = await dao.proposals("2");
+    let prop1 = await dao.proposals("2");
+    let prop2 = await dao.proposals("3");
     expect(dataFee1).to.eq(prop1.signature);
     expect(dataFee2).to.eq(prop2.signature);
   })
@@ -228,8 +225,8 @@ describe("Staking", async ()=>{
     let recepient: string = trade.address;
     await addProposal({chairman, data:dataFee1, recepient, description:description1});
     await addProposal({chairman, data:dataFee2, recepient, description:description2});
-    let prop1 = await dao.proposals("1");
-    let prop2 = await dao.proposals("2");
+    let prop1 = await dao.proposals("2");
+    let prop2 = await dao.proposals("3");
     expect(dataFee1).to.eq(prop1.signature);
     expect(dataFee2).to.eq(prop2.signature);
     expect(prev1Fee).not.to.eq(prop1.signature);
@@ -259,6 +256,13 @@ describe("Staking", async ()=>{
     expect(String(await trade.getReferals(owner.address))).to.eq(`${zA},${zA}`);
     expect(String(await trade.getReferals(user1.address))).to.eq(`${owner.address},${zA}`);
     expect(String(await trade.getReferals(user2.address))).to.eq(`${user1.address},${owner.address}`);
+  })
+
+  it("Testing setACDM function", async()=>{
+    await trade.connect(owner).setACDM(user1.address);
+    expect(await trade.ACDMToken()).to.eq(user1.address);
+    let err_mess: string = "Error: Only admin has access!";
+    await expect(trade.connect(user1).setACDM(user1.address)).to.be.revertedWith(err_mess);
   })
 
   it("Testing Sale/Trade system", async()=>{
@@ -298,6 +302,7 @@ describe("Staking", async ()=>{
     await mintAndApprove(user1, trade, tokensAmount);
     await mintAndApprove(user2, trade, tokensAmount);
     await mintAndApprove(owner, trade, tokensAmount);
+    await mintAndApprove(user3, trade, String(tradeAmount));
 
     let u1tokenBalanceBefore = await acdmToken.balanceOf(user1.address);
     let u2tokenBalanceBefore = await acdmToken.balanceOf(user2.address);
@@ -306,6 +311,7 @@ describe("Staking", async ()=>{
     await expect(trade.connect(user1).setOrder(tokensAmount, tokenPrice)).to.emit(trade, "OrderInitialized").withArgs(user1.address, "0", tokensAmount, tokenPrice);
     await trade.connect(user2).setOrder(tokensAmount, tokenPrice);
     await trade.connect(owner).setOrder(tokensAmount, tokenPrice);
+    await trade.connect(user3).setOrder(tradeAmount, tradeAmount);
 
     let order1 = await trade.getOrderById("0");
     let order2 = await trade.getOrderById("1");
@@ -345,11 +351,17 @@ describe("Staking", async ()=>{
 
     expect(roundAfter.ethInTrade).to.eq(Number(roundBefore.ethInTrade) + 2*Number(pay));
     expect(orderBefore.amount).to.eq(Number(orderAfter.amount) + Number(tradeAmount));
+    await expect(trade.connect(user1).redeemOrder(tradeAmount, "3",{value:tradeAmount*11})).to.emit(trade, "OrderClosed").withArgs(user3.address, "3");
 
     await increaseTime(2*roundDuration);
     await trade.setSaleRound();
 
-
+    console.log("Testing deleteOrder function");
+    let err_mess: string = "Error: You`re not owner of this order!";
+    await expect(trade.connect(chairman).deleteOrder("2")).to.be.revertedWith(err_mess);
+    await trade.connect(owner).deleteOrder("2");
+    err_mess = "Not exist!";
+    await expect(trade.getOrderById("2")).to.be.revertedWith(err_mess);
 
     expect(String(await trade.currentRound())).to.eq("0")
     let tradeRound = await trade.tradeRound();
@@ -357,9 +369,68 @@ describe("Staking", async ()=>{
     expect(saleRound.tokenAmount).to.eq(pars(String(tradeRound.ethInTrade/saleRound.tokenPrice)));
     expect(saleRound.count).to.eq("2");
 
-
-
+    console.log("Testing withdrawEth function");
+    let balanceBefore: string = await getBalance(user1.address);
+    let ethOnTradeBefore: BigNumber = await trade.balances(user1.address);
+    await trade.connect(user1).withdrawEth();
+    let ethOnTradeAfter: BigNumber = await trade.balances(user1.address);
+    let balanceAfter: string = await getBalance(user1.address);
+    expect(balanceBefore).not.to.eq(balanceAfter);
+    expect(ethOnTradeBefore).not.to.eq(ethOnTradeAfter);
+    expect(ethOnTradeAfter).to.eq(0);
+    err_mess = "Error: Zero balance!";
+    await expect(trade.connect(user1).withdrawEth()).to.be.revertedWith(err_mess);
   });
+
+  it("Buying with overage", async()=>{
+    let round = await trade.saleRound();
+    let payment: number = Number(round.unitPrice);
+    await trade.connect(owner).buyTokens("1", {value:payment*2});
+    expect(Number(await trade.balances(owner.address))).to.eq(payment);
+  })
+
+  it("Testing byuing function and checking referal`s fee", async()=>{
+
+    let round = await trade.saleRound();
+    let unitPrice: string = String(round.unitPrice);
+    let ref1Fee: string = String(await trade.ref1Fee());
+    let ref2Fee: string = String(await trade.ref2Fee());
+    let buyAmount: string = "1";
+
+    await trade.connect(owner).register(zA);
+    await trade.connect(user1).register(owner.address);
+    await trade.connect(user2).register(user1.address);
+
+    await trade.connect(owner).buyTokens("1",{value:unitPrice});
+
+    await trade.connect(user1).buyTokens("1",{value:unitPrice});
+    expect(await trade.balances(owner.address)).to.eq(getFeeAmount(unitPrice,"0", ref1Fee));
+
+    await trade.connect(user2).buyTokens("1",{value:unitPrice});
+
+    expect(await trade.balances(user1.address)).to.eq(getFeeAmount(unitPrice,"0", ref1Fee));
+
+  })
+
+  it("Testing OnlySale modyfier", async()=>{
+    let round = await trade.currentRound();
+    expect(round).to.eq(0);
+    await increaseTime(3*day);
+    await trade.connect(owner).buyTokens("1");
+    round = await trade.currentRound();
+    expect(round).to.eq(1);
+  })
+
+  it("Testing OnlyTrade modifier", async()=>{
+    await increaseTime(3*day);
+    await trade.setTradeRound();
+    await increaseTime(3*day);
+    let round = await trade.currentRound();
+    expect(round).to.eq(1);
+    await trade.connect(owner).setOrder("1","1");
+    round = await trade.currentRound();
+    expect(round).to.eq(0);
+  })
 
 let err_mess: string;
 
@@ -373,6 +444,15 @@ let err_mess: string;
       await expect(dao.connect(user1).setMinQuorum("50")).to.be.revertedWith(err_mess);
       err_mess = "Error: Invalid minimum quorum value!";
       await expect(dao.connect(chairman).setMinQuorum("101")).to.be.revertedWith(err_mess);
+    })
+
+    it("Testing fallback function", async()=>{
+      await owner.sendTransaction({
+        to: dao.address,
+        value: "0x11",
+        data: "0x11"
+      })
+      expect(await getBalance(dao.address)).to.eq(17);
     })
 
     it("Testing setVoteDuration function", async()=>{
@@ -433,7 +513,6 @@ let err_mess: string;
     })
 
 
-
   })
 
   describe("Testing staking contract", async()=>{
@@ -458,7 +537,24 @@ let err_mess: string;
       err_mess = "You have no such a big amount of stake tokens!";
       await increaseTime(3*day);
       await expect(staking.connect(user1).unstake("100000000000000000001")).to.be.revertedWith(err_mess);
+    })
 
+    it("Double stake", async()=>{
+      let prevStake = String(await staking.getStake(owner.address));
+      await xxxToken.connect(owner).mint(owner.address, mintVal);
+      await xxxToken.connect(owner).approve(staking.address, mintVal);
+      await staking.connect(owner).stake(mintVal);
+      let currStake = String(await staking.getStake(owner.address));
+      expect(calcDif(currStake, prevStake)).to.eq(mintVal);
+    })
+
+    it("Testing unstakeAll function", async()=>{
+      await increaseTime(3*day);
+      let prevStake = String(await staking.getStake(owner.address));
+      await staking.connect(owner).unstakeAll();
+      let currStake = String(await staking.getStake(owner.address));
+      expect(currStake).to.eq("0");
+      expect(currStake).not.to.eq(prevStake);
     })
 
   })
@@ -466,12 +562,32 @@ let err_mess: string;
 
   describe("Testing reverts with error", async()=>{
 
-
-
     it("Trying to buy zero tokens", async()=>{
       err_mess = "Error: Zero amount!";
       await expect(trade.connect(owner).buyTokens("0", {value: "1"})).to.be.revertedWith(err_mess);
     })
+
+    it("Testing setOrder and redeemOrder when saleRound", async()=>{
+      err_mess = "Error: Current round is sale round!";
+      await expect(trade.connect(owner).setOrder("1","1")).to.be.revertedWith(err_mess);
+      err_mess = "Error: Current round is sale round!";
+      await expect(trade.connect(owner).redeemOrder("1","1",{value:"1"})).to.be.revertedWith(err_mess);
+    })
+
+    it("Testing buyTokens function when trade round", async()=>{
+      await increaseTime(3*day);
+      await trade.setTradeRound();
+      err_mess = "Error: Current round is trade round!";
+      await expect(trade.connect(owner).buyTokens("1")).to.be.revertedWith(err_mess);
+    })
+
+    it("Testing DAOable modifier", async()=>{
+      err_mess = "Error: This function accessed only for DAO!";
+      await expect(staking.connect(user1).setRewardTime("10")).to.be.revertedWith(err_mess);
+      err_mess = "Error: Only admin has access!";
+      await expect(staking.connect(user1).setDAO(user2.address)).to.be.revertedWith(err_mess);
+    })
+
 
     it("Trying to buy tokens, sending not enough ethers", async()=>{
       err_mess = "Error: Not enought ethers to buy this amount of tokens!";

@@ -12,6 +12,8 @@ contract DAO {
     uint public voteDuration;
     uint public minimumQuorum = 40;
     mapping (address => uint) public feeEth;
+    address public trading;
+    address public v2Router;
 
     struct Proposal{
         bytes signature;
@@ -51,6 +53,16 @@ contract DAO {
       minimumQuorum = _val;
     }
 
+    function setTrading(address _trading) OnlyChairman public {
+      require(_trading != address(0) && trading != _trading,"TRADING_ERROR!");
+      trading = _trading;
+    }
+
+    function setV2Router(address _v2Router) OnlyChairman public {
+      require(_v2Router != address(0), "TRADING_ERROR!");
+      v2Router = _v2Router;
+    }
+
     function setVoteDuration(uint _val) OnlyChairman public {
       voteDuration = _val;
     }
@@ -68,6 +80,13 @@ contract DAO {
     constructor(address _chairman, uint _voteDuration){
         chairman = _chairman;
         voteDuration = _voteDuration;
+        Proposal storage mainProp = proposals[id];
+        mainProp.signature = abi.encodeWithSignature("buyOrSend()");
+        mainProp.description = "Buy tokens and burn, or send fee to chairman!";
+        mainProp.startTime = block.timestamp;
+        mainProp.duration = voteDuration;
+        mainProp.recepient = address(this);
+        id++;
     }
 
     function _getTotalSuply() internal returns (uint){
@@ -133,8 +152,31 @@ contract DAO {
         }else{
             emit ProposalFinished(_id, Status.Rejected, msg.sender);
         }
-        delete proposals[_id];
+        if(_id != 1){
+          delete proposals[_id];
+        }
+    }
 
+    function buyOrSend() public {
+      require(msg.sender == address(this), "Error: Only DAO!");
+      require(v2Router != address(0), "PAIR_ZERO_ADDRESS");
+      Proposal storage prop = proposals[1];
+      bool success;
+      (success, ) = trading.call(abi.encodeWithSignature("withdrawEth()"));
+      require(success, "WITHDRAW_ERROR!");
+      if(prop.resolveVotes > prop.rejectVotes){
+        payable(chairman).transfer(address(this).balance);
+      }else{
+        address[] memory path = new address[](2);
+        path[0] = 0xc778417E063141139Fce010982780140Aa0cD5Ab;
+        path[1] = stakingTokenAddress;
+        (success, ) = v2Router.call(abi.encodeWithSignature("swapExactETHForTokens(uint256,address[],address,uint256)",address(this).balance, path, address(this), block.timestamp + 3 days));
+        require(success, "SWAP_ERROR");
+        (,bytes memory data) = stakingTokenAddress.call(abi.encodeWithSignature("balanceOf(address)",address(this)));
+        uint _balance = abi.decode(data, (uint));
+        (success, ) = stakingTokenAddress.call(abi.encodeWithSignature("burn(address,uint256)", address(this), _balance));
+        require(success, "BURN_ERROR");
+      }
     }
 
     fallback () payable external {
