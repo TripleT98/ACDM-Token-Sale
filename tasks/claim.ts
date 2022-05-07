@@ -1,5 +1,5 @@
 import {
-  stakingToken, web3, task, envParams, getSign, staking, dao, trade, rewardToken
+  stakingToken, web3, task, envParams, getSign, staking, dao, rewardToken
 } from "./tasks";
 
 type tArgsType = {
@@ -16,7 +16,7 @@ function claim(){
       let {gaslimit, privatekey} = tArgs;
 
       let data = await staking.methods.claim().encodeABI();
-      let sign = await getSign({gaslimit,data,privatekey,value, to: staking.address});
+      let sign = await getSign({gaslimit,data,privatekey, to: envParams.STAKING_ADDRESS as string});
       let transaction = await web3.eth.sendSignedTransaction(sign.rawTransaction);
       console.log("Claim: success!", transaction.transactionHash);
 

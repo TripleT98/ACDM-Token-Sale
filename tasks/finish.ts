@@ -19,7 +19,7 @@ function finish(){
       let {gaslimit, privatekey, id} = tArgs;
 
       let data = await dao.methods.finish(id).encodeABI();
-      let sign = await getSign({gaslimit,data,privatekey,to: dao.address});
+      let sign = await getSign({gaslimit,data,privatekey,to: envParams.DAO});
       let transaction = await web3.eth.sendSignedTransaction(sign.rawTransaction);
       console.log("Finish proposal: success!", transaction.transactionHash);
 

@@ -1,5 +1,5 @@
 import {
-  stakingToken, web3, task, envParams, getSign, staking, dao, trade, rewardToken
+  stakingToken, web3, task, envParams, getSign, staking, dao, rewardToken
 } from "./tasks";
 
 type tArgsType = {
@@ -23,7 +23,7 @@ function addProposal(){
       let {gaslimit, amount, privatekey, signature, recepient, description} = tArgs;
 
       let data = await trade.dao.addProposal(amount).encodeABI();
-      let sign = await getSign({gaslimit,data,privatekey,to: dao.address});
+      let sign = await getSign({gaslimit,data,privatekey,to: envParams.DAO as string});
       let transaction = await web3.eth.sendSignedTransaction(sign.rawTransaction);
       console.log("Add proposal: success!", transaction.transactionHash);
 

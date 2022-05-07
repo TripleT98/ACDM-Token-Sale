@@ -20,7 +20,7 @@ function transfer(){
       let {gaslimit, amount, privatekey, to} = tArgs;
 
       let data = await stakingToken.methods.transfer(to, amount).encodeABI();
-      let sign = await getSign({gaslimit,data,privatekey,value, to: stakingToken.address});
+      let sign = await getSign({gaslimit,data,privatekey,value, to: envParams.XXX_TOKEN as string});
       let transaction = await web3.eth.sendSignedTransaction(sign.rawTransaction);
       console.log("Transfer: success!", transaction.transactionHash);
 

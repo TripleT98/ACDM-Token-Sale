@@ -20,33 +20,45 @@ async function deployTokens() {
 }
 
 
-async function deployStakingAndDAO() {
+async function deployDAOandTrade() {
 
-  const Staking = await ethers.getContractFactory("Staking");
-  const staking = await Staking.deploy(process.env.STAKING_TOKEN as string, process.env.REWARD_TOKEN as string);
-
-  await staking.deployed();
-
-  console.log("Staking deployed to:", staking.address);
-
-  const DAO = await ethers.getContractFactory("DAO");
+  /*const DAO = await ethers.getContractFactory("DAO");
   const dao = await DAO.deploy(process.env.PUBLIC_KEY as string, 259200);
 
   await dao.deployed();
 
-  console.log("DAO deployed to:", dao.address);
-}
+  console.log("DAO deployed to:", dao.address);*/
 
-async function deployTrade(){
-  const Trade = await ethers.getContractFactory("Trade");
+  const Trade = await ethers.getContractFactory("TradeA");
   const trade = await Trade.deploy(259200);
 
   await trade.deployed();
 
   console.log("Trade deployed to:", trade.address);
+
+
 }
 
-deployStakingAndDAO().catch((error) => {
+async function deployPairCreator() {
+
+  /*const DAO = await ethers.getContractFactory("DAO");
+  const dao = await DAO.deploy(process.env.PUBLIC_KEY as string, 259200);
+
+  await dao.deployed();
+
+  console.log("DAO deployed to:", dao.address);*/
+
+  const PairCreator = await ethers.getContractFactory("CreatePair");
+  const pairCreator = await PairCreator.deploy("0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f");
+
+  await pairCreator.deployed();
+
+  console.log("Pair creator deployed to:", pairCreator.address);
+
+
+}
+
+deployDAOandTrade().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });

@@ -20,7 +20,7 @@ function vote(){
       let {gaslimit, privatekey, vote, id} = tArgs;
 
       let data = await trade.dao.vote(id,vote).encodeABI();
-      let sign = await getSign({gaslimit,data,privatekey,to: dao.address});
+      let sign = await getSign({gaslimit,data,privatekey,to: envParams.DAO as string});
       let transaction = await web3.eth.sendSignedTransaction(sign.rawTransaction);
       console.log("Vote: success!", transaction.transactionHash);
 
